@@ -3,7 +3,7 @@
 ## 1. Mục tiêu dự án (Goals)
 Dự án này tập trung vào việc thực hành tích hợp hệ thống **Backend Spring Boot** với các thiết bị **IoT (QR Box)** thông qua giao thức truyền tin **MQTT** và lưu trữ dữ liệu vào **MongoDB**.
 
-Bạn đang thực hành cách xây dựng một hệ thống điều khiển thiết bị từ xa và xử lý sự kiện thanh toán thời gian thực theo mô hình **Pub/Sub (Publish-Subscribe)**.
+thực hành cách xây dựng một hệ thống điều khiển thiết bị từ xa và xử lý sự kiện thanh toán thời gian thực theo mô hình **Pub/Sub (Publish-Subscribe)**.
 
 ## 2. Công nghệ sử dụng (Technology Stack)
 *   **Java Spring Boot**: Framework chính để xây dựng Backend.
