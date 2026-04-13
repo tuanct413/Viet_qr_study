@@ -1,0 +1,26 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_demo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  emqx:
+    image: emqx/emqx:5.3.0
+    container_name: emqx_iot
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+
+volumes:
+  mongo_data:
+  emqx_data:
+  emqx_log:

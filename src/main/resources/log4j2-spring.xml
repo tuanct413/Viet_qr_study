@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Properties>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} | DTrace ID: %X{requestId} | Thread ID: %t | %-5level | %logger{36} | %msg%n</Property>
+        <Property name="LOG_PATH">logs</Property>
+    </Properties>
+    
+    <Appenders>
+        <!-- Console Appender -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${LOG_PATTERN}" charset="UTF-8"/>
+        </Console>
+        
+        <!-- Application Log Appender (Root) -->
+        <RollingFile name="AppLog" fileName="${LOG_PATH}/application.log"
+                     filePattern="${LOG_PATH}/application-%d{yyyy-MM-dd}.log">
+            <PatternLayout pattern="${LOG_PATTERN}" charset="UTF-8"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+
+        <!-- API Log Appender (com.example.demo) -->
+        <RollingFile name="ApiLog" fileName="${LOG_PATH}/api.log"
+                     filePattern="${LOG_PATH}/api-%d{yyyy-MM-dd}.log">
+            <PatternLayout pattern="${LOG_PATTERN}" charset="UTF-8"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+                <SizeBasedTriggeringPolicy size="10MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+    </Appenders>
+    
+    <Loggers>
+        <Root level="INFO">
+            <AppenderRef ref="AppLog"/>
+            <!-- Hide noisy console logs, only print system ERRORS to console -->
+            <AppenderRef ref="Console" level="ERROR"/>
+        </Root>
+        <Logger name="com.example.demo" level="DEBUG" additivity="false">
+            <AppenderRef ref="ApiLog"/>
+            <!-- Print API ERRORS to console (e.g. 500 Server Error) -->
+            <AppenderRef ref="Console" level="ERROR"/>
+        </Logger>
+    </Loggers>
+</Configuration>
