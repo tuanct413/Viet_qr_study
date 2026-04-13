@@ -63,4 +63,4 @@ Hệ thống hoạt động theo luồng song phương:
 *   **Database**: Dùng **MongoDB Compass** kết nối `mongodb://localhost:27017` để xem dữ liệu giao dịch.
 
 ---
-*Dự án này giúp bạn nắm vững cách làm việc với IoT, giao thức MQTT và tư duy xử lý dữ liệu hướng sự kiện.*
+
