@@ -23,15 +23,15 @@ import java.util.UUID;
 @Log4j2
 public class IotController {
 
-    private final MqttGateway mqttGateway;
-    private final MqttStatusService mqttStatusService;
+    // private final MqttGateway mqttGateway;
+    // private final MqttStatusService mqttStatusService;
 
     /**
      * Kiểm tra trạng thái "sống" của kết nối MQTT.
      * Tránh việc gửi lệnh khi Broker đang offline dẫn đến treo ứng dụng.
      */
     private boolean isMqttConnected() {
-        return mqttStatusService.isConnected();
+        return false; // Force false as MQTT is disabled
     }
 
     /**
@@ -56,7 +56,7 @@ public class IotController {
         log.info("Device: {}, Command: {}", deviceId, action);
         
         // MQTT Gateway chịu trách nhiệm đẩy tin nhắn vào đường ống Outbound
-        mqttGateway.sendToMqtt(topic, 1, payload);
+        // mqttGateway.sendToMqtt(topic, 1, payload);
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "success");
@@ -92,7 +92,7 @@ public class IotController {
         log.info("Event: payment_success, OrderId: {}, Amount: {}", orderId, amount);
         
         // Giả lập gửi MQTT Event từ "Thiết bị" lên Backend
-        mqttGateway.sendToMqtt(topic, 1, payload);
+        // mqttGateway.sendToMqtt(topic, 1, payload);
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "simulated");

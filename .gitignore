@@ -35,3 +35,8 @@ skills-lock.json
 
 # --- Agents ---
 .agents/
+
+# --- Scratch & Temp ---
+scratch/
+SignGen.java
+VIETQR_REPORT.md

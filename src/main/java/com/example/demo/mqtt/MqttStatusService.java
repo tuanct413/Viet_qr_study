@@ -1,6 +1,7 @@
 package com.example.demo.mqtt;
 
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.event.EventListener;
 import org.springframework.integration.mqtt.event.MqttConnectionFailedEvent;
@@ -15,8 +16,9 @@ import org.springframework.stereotype.Service;
  * 
  * - Log4j2: Báo cáo trạng thái kết nối ngay lập tức lên console và file log.
  */
-@Service
+// @Service
 @Log4j2
+@RequiredArgsConstructor
 public class MqttStatusService {
 
     @Getter

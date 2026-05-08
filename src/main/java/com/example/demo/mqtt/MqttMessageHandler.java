@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
  * - Log4j2: Tự động ghi lại nội dung tin nhắn nhận được vào log để hậu kiểm.
  * - MongoDB: Sau khi nhận tin thanh toán, tiến hành lưu trữ vào Database.
  */
-@Component
+// @Component
 @Log4j2
 @RequiredArgsConstructor
 public class MqttMessageHandler {

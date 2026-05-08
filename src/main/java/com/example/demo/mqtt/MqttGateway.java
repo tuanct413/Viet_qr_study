@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * - Mọi tin nhắn truyền qua đây sẽ được đẩy vào 'mqttOutboundChannel' đã cấu hình trong MqttConfig.
  */
 @Component
-@MessagingGateway(defaultRequestChannel = "mqttOutboundChannel")
+// @MessagingGateway(defaultRequestChannel = "mqttOutboundChannel")
 public interface MqttGateway {
     
     /**

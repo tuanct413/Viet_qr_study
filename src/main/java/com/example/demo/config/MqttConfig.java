@@ -23,8 +23,8 @@ import org.springframework.messaging.MessageHandler;
  * - MQTT: Sử dụng để truyền tin nhắn nhanh, nhẹ giữa Server và Thiết bị (QR Box).
  * - Log4j2: Được sử dụng xuyên suốt để theo dõi trạng thái kết nối và vết tin nhắn (Tracing).
  */
-@Configuration
-@IntegrationComponentScan("com.example.demo.mqtt")
+// @Configuration
+// @IntegrationComponentScan("com.example.demo.mqtt")
 public class MqttConfig {
 
     @Value("${mqtt.broker-url}")
@@ -112,6 +112,4 @@ public class MqttConfig {
         adapter.setRecoveryInterval(5000);
         return adapter;
     }
-}
-
 }

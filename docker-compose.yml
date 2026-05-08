@@ -20,6 +20,18 @@ services:
       - emqx_data:/opt/emqx/data
       - emqx_log:/opt/emqx/log
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok_tunnel
+    environment:
+      - NGROK_AUTHTOKEN=3DExOrFCFpT3ZKljcxqL0NLvozF_4khSayrLmFu6Kho1r6XWx
+    command:
+      - "http"
+      - "--domain=unexacerbating-noninstrumentalistic-allyson.ngrok-free.dev"
+      - "host.docker.internal:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   mongo_data:
   emqx_data:
