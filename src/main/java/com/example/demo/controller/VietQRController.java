@@ -133,6 +133,7 @@ public class VietQRController {
             qrRecord = QrRecord.builder()
                     .orderId(orderId)
                     .expectedAmount(expectedAmount)
+                    .sign(sign)
                     .status("PENDING")
                     .createdAt(java.time.LocalDateTime.now())
                     .build();
@@ -291,10 +292,17 @@ public class VietQRController {
 
         // ---- [#6] XÁC THỰC CHỮ KÝ WEBHOOK ----
         if (receivedSign != null && !receivedSign.isEmpty()) {
-            boolean signValid = verifyWebhookSignature(body, receivedSign);
+            boolean signValid = false;
+            String orderId = (String) body.get("orderId");
+            if (orderId != null) {
+                Optional<QrRecord> qrOpt = qrRecordRepo.findByOrderId(orderId);
+                if (qrOpt.isPresent() && qrOpt.get().getSign() != null) {
+                    signValid = receivedSign.equals(qrOpt.get().getSign());
+                }
+            }
+
             if (!signValid) {
-                logger.warn(">>> [SECURITY] INVALID SIGNATURE! Possible fake webhook. orderId={}",
-                        body.get("orderId"));
+                logger.warn(">>> [SECURITY] INVALID SIGNATURE! Possible fake webhook. orderId={}", orderId);
                 // Trả 200 OK để Gateway không retry, nhưng KHÔNG xử lý nghiệp vụ
                 Map<String, Object> fakeResp = new LinkedHashMap<>();
                 fakeResp.put("error", true);
@@ -423,13 +431,24 @@ public class VietQRController {
      */
     private String buildRequestSign(Map<String, Object> body) {
         try {
-            TreeMap<String, Object> sorted = new TreeMap<>(body);
-            sorted.remove("sign");
+            // Dùng List thay vì TreeMap để sắp xếp các key
+            List<String> keys = new ArrayList<>(body.keySet());
+            keys.remove("sign"); // Bỏ trường sign (nếu có)
+            Collections.sort(keys); // Sắp xếp key theo thứ tự Alphabet
+
             StringBuilder sb = new StringBuilder();
-            for (Object v : sorted.values()) {
-                if (v != null) sb.append(v.toString());
+            // Lặp qua danh sách key đã sắp xếp để lấy value
+            for (String key : keys) {
+                Object v = body.get(key);
+                if (v != null && !v.toString().isEmpty()) {
+                    sb.append(v instanceof Number
+                            ? String.format("%.0f", ((Number) v).doubleValue())
+                            : v.toString());
+                }
             }
-            return hmacSHA256(sb.toString(), VIETQR_SECRET_KEY);
+            String dataToVerify = sb.toString();
+            logger.info(">>> [BUILD SIGN] DataToVerify=[{}]", dataToVerify);
+            return hmacSHA256(dataToVerify, VIETQR_SECRET_KEY);
         } catch (Exception e) {
             logger.error(">>> [SIGN BUILD ERROR] {}", e.getMessage());
             return "";

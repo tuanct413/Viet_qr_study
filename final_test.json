@@ -1,0 +1,10 @@
+{
+    "orderId": "ORD_FINAL_PRO_100",
+    "amount": 20000,
+    "bankCode": "MB",
+    "bankAccount": "0002086343228",
+    "userBankName": "NGUYEN MINH TUAN",
+    "content": "THANH TOAN TEST 100",
+    "qrType": 0,
+    "transType": "C"
+}

@@ -44,6 +44,10 @@ public class QrRecord {
     /** transactionRefId từ VietQR — dùng để polling trạng thái */
     private String transactionRefId;
 
+    /** Nội dung chuyển khoản (chứa mã VQR...) — dùng để tìm đơn khi mất orderId */
+    @Indexed
+    private String content;
+
     /** Thời điểm tạo QR */
     private LocalDateTime createdAt;
 
@@ -52,7 +56,9 @@ public class QrRecord {
      * - PENDING: Chưa thanh toán
      * - PAID: Đã thanh toán đủ
      * - UNDERPAID: Thanh toán thiếu
-     * - EXPIRED: Hết hạn (> 5 phút)
-     */
+    /** Trạng thái đơn hàng (PENDING, PAID, ...) */
     private String status;
+
+    /** Chữ ký (sign) gửi lên lúc tạo QR — dùng để đối soát Webhook (Correlation ID) */
+    private String sign;
 }
