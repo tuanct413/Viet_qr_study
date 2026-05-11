@@ -20,4 +20,6 @@ public interface TransactionRepository extends MongoRepository<Transaction, Stri
      * Dùng cho Polling: Kiểm tra trạng thái đơn hàng.
      */
     Optional<Transaction> findByOrderId(String orderId);
+
+    boolean existsByOrderId(String orderId);
 }

@@ -44,6 +44,12 @@ public class VietQRController {
     @Value("${vietqr.secret-key}")
     private String VIETQR_SECRET_KEY;
 
+    @Value("${merchant.webhook.username}")
+    private String WEBHOOK_USERNAME;
+
+    @Value("${merchant.webhook.password}")
+    private String WEBHOOK_PASSWORD;
+
     @Autowired
     private TransactionRepository transactionRepo;
 
@@ -103,7 +109,8 @@ public class VietQRController {
 
         String orderId = (String) requestBody.get("orderId");
         Long expectedAmount = requestBody.get("amount") != null
-                ? Long.valueOf(requestBody.get("amount").toString()) : null;
+                ? Long.valueOf(requestBody.get("amount").toString())
+                : null;
 
         // --- [#10] IDEMPOTENT: Kiểm tra QR đã được tạo trước đó chưa? ---
         if (orderId != null) {
@@ -235,9 +242,9 @@ public class VietQRController {
     // =========================================================================
     // [EXISTING] Endpoint cấp Token cho VietQR Gateway gọi vào
     // =========================================================================
-    @PostMapping(value = {"/api/merchant-get-token", "/api/token_generate"})
+    @PostMapping(value = { "/api/merchant-get-token", "/api/token_generate" })
     public ResponseEntity<Object> issueToken(HttpServletRequest request,
-                                              @RequestBody(required = false) Map<String, Object> body) {
+            @RequestBody(required = false) Map<String, Object> body) {
         logger.info(">>> [UNIFIED CALL] URI: {}", request.getRequestURI());
 
         boolean hasSignHeader = request.getHeader("sign") != null
@@ -252,17 +259,38 @@ public class VietQRController {
 
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Basic ")) {
-            String jwtToken = Jwts.builder()
-                    .setSubject("VietQR-Mock")
-                    .setIssuedAt(new Date())
-                    .setExpiration(new Date(System.currentTimeMillis() + 300_000))
-                    .signWith(SignatureAlgorithm.HS256, JWT_SECRET.getBytes())
-                    .compact();
-            Map<String, Object> tokenResp2 = new LinkedHashMap<>();
-            tokenResp2.put("access_token", jwtToken);
-            tokenResp2.put("token_type", "Bearer");
-            tokenResp2.put("expires_in", 300);
-            return ResponseEntity.ok(tokenResp2);
+            try {
+                String base64Credentials = authHeader.substring("Basic ".length()).trim();
+                byte[] credDecoded = Base64.getDecoder().decode(base64Credentials);
+                String credentials = new String(credDecoded, StandardCharsets.UTF_8);
+
+                final String[] values = credentials.split(":", 2);
+                if (values.length < 2) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Basic Auth format");
+                }
+                String username = values[0];
+                String password = values[1];
+
+                if (!WEBHOOK_USERNAME.equals(username) || !WEBHOOK_PASSWORD.equals(password)) {
+                    logger.warn(">>> [SECURITY] Sai Username/Password: {} / {}", username, password);
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Sai thông tin đăng nhập");
+                }
+
+                String jwtToken = Jwts.builder()
+                        .setSubject("VietQR-Mock")
+                        .setIssuedAt(new Date())
+                        .setExpiration(new Date(System.currentTimeMillis() + 300_000))
+                        .signWith(SignatureAlgorithm.HS256, JWT_SECRET.getBytes())
+                        .compact();
+                Map<String, Object> tokenResp2 = new LinkedHashMap<>();
+                tokenResp2.put("access_token", jwtToken);
+                tokenResp2.put("token_type", "Bearer");
+                tokenResp2.put("expires_in", 300);
+                return ResponseEntity.ok(tokenResp2);
+            } catch (Exception e) {
+                logger.error(">>> [SECURITY] Lỗi giải mã chuỗi Basic Auth: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid Basic Auth format");
+            }
         }
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
@@ -272,7 +300,7 @@ public class VietQRController {
     // =========================================================================
     @PostMapping("/bank/api/transaction-sync")
     public ResponseEntity<Object> transactionSync(HttpServletRequest request,
-                                                   @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body) {
         return handleWebhook(request, body);
     }
 
@@ -282,75 +310,78 @@ public class VietQRController {
     // [CHECKLIST #9] Kiểm tra sai lệch số tiền
     // =========================================================================
     private ResponseEntity<Object> handleWebhook(HttpServletRequest request,
-                                                   Map<String, Object> body) {
+            Map<String, Object> body) {
         // --- Log đầy đủ để trace ---
         logRequest(request, body);
 
-        // --- Lấy sign từ header hoặc body ---
+        String orderId = (String) body.get("orderId");
         String receivedSign = resolveSign(request, body);
-        logger.info(">>> [WEBHOOK] Received sign=[{}] for orderId={}", receivedSign, body.get("orderId"));
+        String txId = (String) body.get("transactionid");
 
-        // ---- [#6] XÁC THỰC CHỮ KÝ WEBHOOK ----
-        if (receivedSign != null && !receivedSign.isEmpty()) {
-            boolean signValid = false;
-            String orderId = (String) body.get("orderId");
-            if (orderId != null) {
-                Optional<QrRecord> qrOpt = qrRecordRepo.findByOrderId(orderId);
-                if (qrOpt.isPresent() && qrOpt.get().getSign() != null) {
-                    signValid = receivedSign.equals(qrOpt.get().getSign());
-                }
-            }
-
-            if (!signValid) {
-                logger.warn(">>> [SECURITY] INVALID SIGNATURE! Possible fake webhook. orderId={}", orderId);
-                // Trả 200 OK để Gateway không retry, nhưng KHÔNG xử lý nghiệp vụ
-                Map<String, Object> fakeResp = new LinkedHashMap<>();
-                fakeResp.put("error", true);
-                fakeResp.put("errorReason", "INVALID_SIGNATURE");
-                fakeResp.put("toastMessage", "Chữ ký không hợp lệ");
-                fakeResp.put("object", null);
-                return ResponseEntity.ok(fakeResp);
-            }
-            logger.info(">>> [SECURITY] Signature VALID ✓");
-        } else {
-            logger.warn(">>> [SECURITY] Webhook không có chữ ký — đang chạy ở chế độ debug");
+        // 1. Reject ngay nếu orderId rỗng
+        if (orderId == null || orderId.trim().isEmpty()) {
+            logger.warn(">>> [SECURITY] Webhook bị từ chối: orderId bị trống");
+            return ResponseEntity.badRequest().body("orderId is required");
         }
 
-        // ---- [#7] IDEMPOTENCY ----
-        String txId = (String) body.get("transactionid");
+        // 2. Reject nếu không có chữ ký (Bỏ chế độ debug)
+        if (receivedSign == null || receivedSign.trim().isEmpty()) {
+            logger.warn(">>> [SECURITY] Webhook bị từ chối: Thiếu chữ ký (orderId={})", orderId);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Missing signature");
+        }
+
+        // 3. Idempotency check bằng orderId (Tránh xử lý trùng đơn hàng)
+        if (transactionRepo.existsByOrderId(orderId)) {
+            logger.info(">>> [IDEMPOTENT] orderId={} đã được xử lý trước đó → Bỏ qua", orderId);
+            return ResponseEntity.ok(buildSuccessResponse(txId));
+        }
+
+        // 4. Idempotency check bằng transactionid (Tránh xử lý trùng webhook)
         if (txId != null) {
             Optional<Transaction> existing = transactionRepo.findByTransactionId(txId);
             if (existing.isPresent()) {
-                logger.info(">>> [IDEMPOTENT] Duplicate webhook txId={} — bỏ qua, trả 200 OK", txId);
+                logger.info(">>> [IDEMPOTENT] Webhook trùng txId={} → Bỏ qua", txId);
                 return ResponseEntity.ok(buildSuccessResponse(txId));
             }
         }
 
+        logger.info(">>> [WEBHOOK] Received sign=[{}] for orderId={}", receivedSign, orderId);
+
+        // ---- [#6] XÁC THỰC CHỮ KÝ WEBHOOK ----
+        boolean signValid = false;
+        Optional<QrRecord> qrOpt = qrRecordRepo.findByOrderId(orderId);
+        if (qrOpt.isPresent() && qrOpt.get().getSign() != null) {
+            signValid = receivedSign.equals(qrOpt.get().getSign());
+        }
+
+        if (!signValid) {
+            logger.warn(">>> [SECURITY] INVALID SIGNATURE! Possible fake webhook. orderId={}", orderId);
+            return ResponseEntity.ok(buildFakeResponse()); 
+        }
+        logger.info(">>> [SECURITY] Signature VALID ✓");
+
         // ---- [#9] KIỂM TRA SAI LỆCH SỐ TIỀN ----
-        String orderId = (String) body.get("orderId");
         Long paidAmount = body.get("amount") != null
-                ? Long.valueOf(body.get("amount").toString()) : null;
+                ? Long.valueOf(body.get("amount").toString())
+                : null;
         Long expectedAmount = null;
         String finalStatus = "SUCCESS";
 
-        if (orderId != null) {
-            Optional<QrRecord> qrOpt = qrRecordRepo.findByOrderId(orderId);
-            if (qrOpt.isPresent()) {
-                expectedAmount = qrOpt.get().getExpectedAmount();
-                if (expectedAmount != null && paidAmount != null && paidAmount < expectedAmount) {
-                    finalStatus = "UNDERPAID";
-                    logger.warn(">>> [AMOUNT MISMATCH] orderId={} | Expected={} | Paid={}",
-                            orderId, expectedAmount, paidAmount);
-                    // Cập nhật trạng thái QR
-                    QrRecord qr = qrOpt.get();
-                    qr.setStatus("UNDERPAID");
-                    qrRecordRepo.save(qr);
-                } else {
-                    // Cập nhật trạng thái QR thành PAID
-                    QrRecord qr = qrOpt.get();
-                    qr.setStatus("PAID");
-                    qrRecordRepo.save(qr);
-                }
+        if (qrOpt.isPresent()) {
+            expectedAmount = qrOpt.get().getExpectedAmount();
+            if (expectedAmount != null && paidAmount != null && paidAmount < expectedAmount) {
+                finalStatus = "UNDERPAID";
+                logger.warn(">>> [AMOUNT MISMATCH] orderId={} | Expected={} | Paid={}",
+                        orderId, expectedAmount, paidAmount);
+                // Cập nhật trạng thái QR
+                QrRecord qr = qrOpt.get();
+                qr.setStatus("UNDERPAID");
+                qrRecordRepo.save(qr);
+            } else {
+                // Cập nhật trạng thái QR thành PAID
+                QrRecord qr = qrOpt.get();
+                qr.setStatus("PAID");
+                qrRecordRepo.save(qr);
             }
         }
 
@@ -379,10 +410,8 @@ public class VietQRController {
         // ---- Nếu UNDERPAID: Không thực hiện nghiệp vụ, chỉ log ----
         if ("UNDERPAID".equals(finalStatus)) {
             logger.warn(">>> [BUSINESS] orderId={} UNDERPAID — Không kích hoạt dịch vụ!", orderId);
-            // TODO: Notify operator / refund logic tại đây
         } else {
             logger.info(">>> [BUSINESS] orderId={} SUCCESS — Tiến hành kích hoạt dịch vụ...", orderId);
-            // TODO: unlock IoT device, update order, notify user, etc.
         }
 
         return ResponseEntity.ok(buildSuccessResponse(txId));
@@ -473,11 +502,25 @@ public class VietQRController {
     /** Lấy chữ ký từ header hoặc body */
     private String resolveSign(HttpServletRequest request, Map<String, Object> body) {
         String sign = request.getHeader("sign");
-        if (sign == null) sign = request.getHeader("signature");
-        if (sign == null) sign = request.getHeader("x-signature");
-        if (sign == null) sign = (String) body.get("sign");
-        if (sign == null) sign = request.getParameter("sign");
+        if (sign == null)
+            sign = request.getHeader("signature");
+        if (sign == null)
+            sign = request.getHeader("x-signature");
+        if (sign == null)
+            sign = (String) body.get("sign");
+        if (sign == null)
+            sign = request.getParameter("sign");
         return sign;
+    }
+
+    /** Tạo response lỗi chuẩn VietQR khi chữ ký sai */
+    private Map<String, Object> buildFakeResponse() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("error", true);
+        response.put("errorReason", "INVALID_SIGNATURE");
+        response.put("toastMessage", "Chữ ký không hợp lệ");
+        response.put("object", null);
+        return response;
     }
 
     /** Tạo response thành công chuẩn VietQR */
@@ -496,7 +539,8 @@ public class VietQRController {
     private void logRequest(HttpServletRequest request, Map<String, Object> body) {
         try {
             logger.info(">>> [WEBHOOK BODY] {}", objectMapper.writeValueAsString(body));
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
 
         Enumeration<String> headerNames = request.getHeaderNames();
         while (headerNames.hasMoreElements()) {
